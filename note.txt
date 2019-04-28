@@ -1,0 +1,198 @@
+lambda学习笔记
+
+
+做一个用dlib的功能
+import dlib
+print dlib.__file__
+
+
+[A]amazon配置：
+	1.添加lambda后，直接保存，不要设置trigger，注意关注右上角你是使用哪个区域的
+	2.添加API gateway，创建方法GET，然后选择绑定lambda函数，只有选择了正确的区域，才能列出lambda函数，千万不要勾选Lambda Proxy
+	3.添加资源（其实就是路径），勾选API Gateway CORS ，否则chrome会提示安全问题
+	4.部署API  勾选新阶段  部署即可，点击生成的链接，测试是否ok
+
+[B]docker搭建amazon的EC2虚拟机：
+	docker pull amazonlinux  
+	sudo docker run -it amazonlinux
+	
+	exit退出后，容器是否还会继续运行？
+	sudo docker attach amazonlinux	不会
+	sudo docker exec -it amazonlinux	会
+	
+	操作完后，保存，否则重启镜像，仍然啥都没有
+	sudo docker commit aacc2e86f8be  zhouhua:test
+	sudo docker images查看
+	
+	如果直接退出，容器会继续运行，以后要进入，直接
+	sudo docker ps 查看正在运行的容器
+	sudo docker attach aacc2e86f8be 或者sudo docker exec -it aacc2e86f8be /bin/sh 进入指定ID的容器
+	用attach的话，ctrl+D会退出，ctrl+P或Q不会关闭容器
+
+[C]运行环境搭建
+	yum install net-tools -y
+	yum install iputils -y
+	yum install git -y
+	yum install python27-pip -y
+	yum install gcc -y
+	yum install gcc-c++ -y
+	yum install cmake -y
+	yum search python|grep devel
+	yum install python27-devel.x86_64 -y
+	yum install zip -y
+	方法一
+	pip-2.7 install dlib -t /lambda1
+	cd lambda1 && zip dep.zip *
+	方法二
+        virtualenv /lambda1
+	pip install dlib
+	cd /lambda1/python2.7/site-packages/ && zip dep*.zip
+	参考https://github.com/michaelulin/pytorch-caffe2-aws-lambda
+
+[D]怎样把包传送出来
+	sudo docker cp aacc2e86f8be:/lambda1/dep.zip ./
+
+[E]运行
+	进入amazon lambda控制台
+	点击上传代码
+	上传后，会删掉默认的lambda_function.py
+	新建一个：
+	import dlib
+	def lambda_handler(event, context):
+ 	   # TODO implement
+ 	   return 'Hello fucking from Lambda'+dlib.__file__
+	即可看到HTTP接口返回的dlib的信息
+
+
+[F]使用s3存储桶的数据
+	采用python的boto3模块操作，跟本地操作s3是一样的
+	在IAM里，把创建lambda时所使用的Role，分配S3的FULLAccess权限
+	import boto3
+	def lambda_handler(event, context):
+    		# TODO implement
+    		s3 = boto3.resource('s3')
+    		f = open('/tmp/file.txt', 'w')
+    		f.write('Hello, world!')
+    		f.close()
+    		s3.meta.client.upload_file('/tmp/file.txt', 'sssstong1', 'hello.txt')
+    		ss = ""
+    		for bucket in s3.buckets.all():
+        			ss = ss+bucket.name
+    		return 'Hello 99from Lambda:%s'%ss
+
+	注意：只有/tmp目录你才有读写权限
+	下载文件
+		s3 = boto3.client('s3')
+		s3.download_file('mybucket', 'model.proto', '/tmp/model.proto')
+	
+[G]上传文件时自动做事情
+		import boto3
+		import time
+		def lambda_handler(event, context):
+		    s3 = boto3.resource('s3')
+		    f = open('/tmp/file.txt', 'w')
+		    f.write('Hello, world!'+time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
+		    f.close()
+		    s3.meta.client.upload_file('/tmp/file.txt', 'sssstong1', 'hello'+ time.strftime('%Y-%m-%d-%H_%M_%S',time.localtime(time.time()))+'.txt')
+		    return 'Hello from Lambda'
+		
+		设置lambda的Trigger为s3某桶的PUT
+		设置的前缀并不会过滤触发
+		然后用另一个lambda上传文件，或者在本地用boto3上传文件
+		可以看到每次上传文件都会增加一个记录时间的文件
+
+		参考：
+		s3_client = boto3.client('s3')
+		open('hello.txt').write('Hello, world!')
+		# Upload the file to S3
+		s3_client.upload_file('hello.txt', 'MyBucket', 'hello-remote.txt')
+		# Download the file from S3
+		s3_client.download_file('MyBucket', 'hello-remote.txt', 'hello2.txt')
+		print(open('hello2.txt').read())
+		
+		怎样知道是哪个文件呢？
+		import boto3
+		import time
+		def lambda_handler(event, context):
+    			# TODO implement
+    			record = event['Records'][0]
+    			uploaded = record['s3']
+    			filename = uploaded['object']['key'].split('/')[-1]
+
+		    	s3 = boto3.resource('s3')
+    			f = open('/tmp/file.txt', 'w')
+			f.write('Hello, world!'+time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
+    			f.close()
+    			s3.meta.client.upload_file('/tmp/file.txt', 'sssstong1', 'uuuuu'+filename+ time.strftime('%Y-%m-%d-%H_%M_%S',time.localtime(time.time()))+'.txt')
+    			 return filename+'Hello 99from Lambda:%s%s'%(ss,time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time())))
+
+	
+[H]API gateway 上传文件并处理
+		
+转型：由于API gateway 处理MIME比较复杂，暂时不深入学习了，仅做一个一旦上传图片，就处理打分结果到对应文件名.txt的文件中
+
+[I]使用caffe
+	工程代码：
+	
+	上传模型到S3
+	打包python环境上传
+	
+
+	
+	
+
+
+docker darknet
+
+sudo docker pull amazonlinux  
+sudo docker run -it amazonlinux
+yum clean all ;yum repolist  
+yum update
+
+yum install git -y
+yum install gcc -y
+yum install gcc-c++ -y
+yum install cmake -y
+
+
+1.aws创建ec2，选择第二种Amazon Linux
+sudo yum update -y
+sudo yum install git -y
+sudo yum install gcc -y
+sudo yum install gcc-c++ -y
+git clone https://github.com/pjreddie/darknet
+
+	
+
+
+
+
+
+
+docker amazonlinux 笔记
+
+sudo docker run -it dacut/amazon-linux-python-3.6
+
+yum clean all
+yum makecache
+yum update
+
+yum install -y busybox
+busybox wget http://10.162.2.100/amazonLinuxRPM.tar
+busybox tar xf amazonLinuxRPM.tar 
+yum install -y *.rpm
+
+yum install -y git
+yum install -y vim
+git clone https://github.com/pjreddie/darknet
+cd darknet
+make
+
+
+sudo docker run --rm -v "$PWD":/var/task lambci/lambda:python2.7
+
+
+
+1.一个仓库
+2.S3触发
+
